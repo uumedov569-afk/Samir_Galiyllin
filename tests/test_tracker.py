@@ -1,188 +1,240 @@
-import json
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
+import random
+import json
 import os
+from datetime import datetime
 
-DATA_FILE = "weather_diary.json"
+# Предопределённые цитаты (текст, автор, тема)
+DEFAULT_QUOTES = [
+    {"text": "Будь тем изменением, которое хочешь видеть в мире.", "author": "Махатма Ганди", "theme": "Мотивация"},
+    {"text": "Жизнь — это то, что с тобой происходит, пока ты строишь планы.", "author": "Джон Леннон", "theme": "Жизнь"},
+    {"text": "Воображение важнее знания.", "author": "Альберт Эйнштейн", "theme": "Знание"},
+    {"text": "Ты можешь быть тем, кем захочешь.", "author": "Доктор Сьюз", "theme": "Вдохновение"},
+    {"text": "Не бойтесь совершенства — вам его не достичь.", "author": "Сальвадор Дали", "theme": "Искусство"},
+    {"text": "Успех — это способность идти от неудачи к неудаче, не теряя энтузиазма.", "author": "Уинстон Черчилль", "theme": "Успех"},
+]
 
-class WeatherDiary:
-    def init(self, root):
+QUOTES_FILE = "quotes.json"
+HISTORY_FILE = "history.json"
+
+class QuoteGenerator:
+    def __init__(self, root):
         self.root = root
-        self.root.title("Weather Diary")
-        self.root.geometry("800x500")
-        self.records = []
-        self.filtered_records = []
+        self.root.title("Random Quote Generator")
+        self.root.geometry("700x600")
+        self.root.resizable(True, True)
 
-        # --- Поля ввода ---
-        input_frame = tk.LabelFrame(root, text="Новая запись", padx=10, pady=10)
-        input_frame.pack(pady=10, padx=10, fill="x")
+        # Загрузка данных
+        self.quotes = self.load_quotes()
+        self.history = self.load_history()
 
-        # Дата
-        tk.Label(input_frame, text="Дата (ГГГГ-ММ-ДД):").grid(row=0, column=0, sticky="e", pady=5)
-        self.date_entry = tk.Entry(input_frame, width=20)
-        self.date_entry.grid(row=0, column=1, pady=5)
-        self.date_entry.insert(0, datetime.today().strftime("%Y-%m-%d"))
+        # Переменные для фильтрации
+        self.filter_author_var = tk.StringVar()
+        self.filter_theme_var = tk.StringVar()
+        self.current_quote_text = tk.StringVar()
+        self.current_quote_author = tk.StringVar()
+        self.current_quote_theme = tk.StringVar()
 
-        # Температура
-        tk.Label(input_frame, text="Температура (°C):").grid(row=1, column=0, sticky="e", pady=5)
-        self.temp_entry = tk.Entry(input_frame, width=20)
-        self.temp_entry.grid(row=1, column=1, pady=5)
+        # Создание интерфейса
+        self.create_widgets()
+        self.update_author_filter()
+        self.update_theme_filter()
+        self.refresh_history_display()
 
-        # Описание
-        tk.Label(input_frame, text="Описание:").grid(row=2, column=0, sticky="e", pady=5)
-        self.desc_entry = tk.Entry(input_frame, width=40)
-        self.desc_entry.grid(row=2, column=1, pady=5)
+    def load_quotes(self):
+        """Загружает цитаты из JSON или создаёт файл с предопределёнными"""
+        if os.path.exists(QUOTES_FILE):
+            with open(QUOTES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        else:
+            self.save_quotes(DEFAULT_QUOTES)
+            return DEFAULT_QUOTES.copy()
 
-        # Осадки
-        tk.Label(input_frame, text="Осадки:").grid(row=3, column=0, sticky="e", pady=5)
-        self.rain_var = tk.StringVar(value="Нет")
-        rain_frame = tk.Frame(input_frame)
-        rain_frame.grid(row=3, column=1, sticky="w")
-        tk.Radiobutton(rain_frame, text="Да", variable=self.rain_var, value="Да").pack(side="left")
-        tk.Radiobutton(rain_frame, text="Нет", variable=self.rain_var, value="Нет").pack(side="left")
+    def save_quotes(self, quotes=None):
+        """Сохраняет цитаты в JSON"""
+        if quotes is None:
+            quotes = self.quotes
+        with open(QUOTES_FILE, "w", encoding="utf-8") as f:
+            json.dump(quotes, f, ensure_ascii=False, indent=4)
 
-        # Кнопка добавления
-        tk.Button(input_frame, text="+ Добавить запись", command=self.add_record, bg="lightgreen").grid(row=4, column=0, columnspan=2, pady=10)
+    def load_history(self):
+        """Загружает историю из JSON"""
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return []
 
-        # --- Таблица записей ---
-        list_frame = tk.LabelFrame(root, text="Записи о погоде", padx=10, pady=10)
-        list_frame.pack(pady=10, padx=10, fill="both", expand=True)
+    def save_history(self):
+        """Сохраняет историю в JSON"""
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.history, f, ensure_ascii=False, indent=4)
 
-        columns = ("Дата", "Температура", "Описание", "Осадки")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings")
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=150)
-        self.tree.pack(fill="both", expand=True)
+    def create_widgets(self):
+        # Рамка для отображения текущей цитаты
+        quote_frame = ttk.LabelFrame(self.root, text="Текущая цитата", padding=10)
+        quote_frame.pack(fill="both", expand=False, padx=10, pady=10)
 
-        # --- Фильтры ---
-        filter_frame = tk.LabelFrame(root, text="Фильтрация", padx=10, pady=10)
-        filter_frame.pack(pady=10, padx=10, fill="x")
+        ttk.Label(quote_frame, textvariable=self.current_quote_text, wraplength=650, font=("Arial", 12, "italic"), justify="center").pack(pady=5)
+        ttk.Label(quote_frame, textvariable=self.current_quote_author, font=("Arial", 10, "bold")).pack()
+        ttk.Label(quote_frame, textvariable=self.current_quote_theme, font=("Arial", 9)).pack()
 
-        tk.Label(filter_frame, text="Дата (ГГГГ-ММ-ДД):").grid(row=0, column=0, padx=5)
-        self.filter_date = tk.Entry(filter_frame, width=15)
-        self.filter_date.grid(row=0, column=1, padx=5)
+        # Кнопка генерации
+        ttk.Button(self.root, text="Сгенерировать цитату", command=self.generate_quote).pack(pady=5)
 
-        tk.Label(filter_frame, text="Температура от (°C):").grid(row=0, column=2, padx=5)
-        self.filter_temp_from = tk.Entry(filter_frame, width=10)
-        self.filter_temp_from.grid(row=0, column=3, padx=5)
+        # Рамка добавления новой цитаты
+        add_frame = ttk.LabelFrame(self.root, text="Добавить новую цитату", padding=10)
+        add_frame.pack(fill="x", padx=10, pady=10)
 
-        tk.Label(filter_frame, text="до:").grid(row=0, column=4, padx=5)
-        self.filter_temp_to = tk.Entry(filter_frame, width=10)
-        self.filter_temp_to.grid(row=0, column=5, padx=5)
+        ttk.Label(add_frame, text="Текст:").grid(row=0, column=0, sticky="w")
+        self.new_text = tk.Text(add_frame, height=3, width=50)
+        self.new_text.grid(row=0, column=1, padx=5, pady=5)
 
-        tk.Button(filter_frame, text="Применить фильтр", command=self.apply_filter).grid(row=0, column=6, padx=10)
-        tk.Button(filter_frame, text="Сбросить фильтр", command=self.reset_filter).grid(row=0, column=7, padx=5)
+        ttk.Label(add_frame, text="Автор:").grid(row=1, column=0, sticky="w")
+        self.new_author = ttk.Entry(add_frame, width=30)
+        self.new_author.grid(row=1, column=1, padx=5, pady=5)
 
-        # --- Кнопки сохранения/загрузки ---
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=5)
-        tk.Button(btn_frame, text="💾 Сохранить в JSON", command=self.save_to_file, bg="lightblue").pack(side="left", padx=5)
-        tk.Button(btn_frame, text="📂 Загрузить из JSON", command=self.load_from_file, bg="lightyellow").pack(side="left", padx=5)
+        ttk.Label(add_frame, text="Тема:").grid(row=2, column=0, sticky="w")
+        self.new_theme = ttk.Entry(add_frame, width=30)
+        self.new_theme.grid(row=2, column=1, padx=5, pady=5)
 
-        # Загружаем данные при старте
-        self.load_from_file()
+        ttk.Button(add_frame, text="Добавить", command=self.add_quote).grid(row=3, column=0, columnspan=2, pady=10)
 
-    def validate_date(self, date_str):
-        try:
-            datetime.strptime(date_str, "%Y-%m-%d")
-            return True
-        except ValueError:
-            return False
-          def add_record(self):
-        date = self.date_entry.get().strip()
-        temp = self.temp_entry.get().strip()
-        desc = self.desc_entry.get().strip()
-        rain = self.rain_var.get()
+        # Рамка фильтрации
+        filter_frame = ttk.LabelFrame(self.root, text="Фильтрация истории", padding=10)
+        filter_frame.pack(fill="x", padx=10, pady=5)
 
-        # Проверки
-        if not self.validate_date(date):
-            messagebox.showerror("Ошибка", "Неверный формат даты. Используйте ГГГГ-ММ-ДД")
+        ttk.Label(filter_frame, text="Фильтр по автору:").grid(row=0, column=0, sticky="w")
+        self.author_filter_combo = ttk.Combobox(filter_frame, textvariable=self.filter_author_var, state="readonly")
+        self.author_filter_combo.grid(row=0, column=1, padx=5, pady=5)
+        self.author_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_history_display())
+
+        ttk.Label(filter_frame, text="Фильтр по теме:").grid(row=1, column=0, sticky="w")
+        self.theme_filter_combo = ttk.Combobox(filter_frame, textvariable=self.filter_theme_var, state="readonly")
+        self.theme_filter_combo.grid(row=1, column=1, padx=5, pady=5)
+        self.theme_filter_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_history_display())
+
+        ttk.Button(filter_frame, text="Сбросить фильтры", command=self.reset_filters).grid(row=2, column=0, columnspan=2, pady=5)
+
+        # История
+        history_frame = ttk.LabelFrame(self.root, text="История цитат", padding=10)
+        history_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        scrollbar = ttk.Scrollbar(history_frame)
+        scrollbar.pack(side="right", fill="y")
+
+        self.history_listbox = tk.Listbox(history_frame, yscrollcommand=scrollbar.set, font=("Courier", 9))
+        self.history_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.history_listbox.yview)
+
+        # Нижняя панель
+        button_frame = ttk.Frame(self.root)
+        button_frame.pack(fill="x", padx=10, pady=5)
+
+        ttk.Button(button_frame, text="Очистить историю", command=self.clear_history).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Экспорт истории", command=self.export_history).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Выйти", command=self.root.quit).pack(side="right", padx=5)
+
+    def generate_quote(self):
+        """Генерирует случайную цитату"""
+        if not self.quotes:
+            messagebox.showwarning("Нет цитат", "Сначала добавьте хотя бы одну цитату!")
             return
-        try:
-            temp_val = float(temp)
-        except ValueError:
-            messagebox.showerror("Ошибка", "Температура должна быть числом")
-            return
-        if not desc:
-            messagebox.showerror("Ошибка", "Описание не может быть пустым")
-            return
 
-        record = {
-            "date": date,
-            "temperature": temp_val,
-            "description": desc,
-            "rain": rain
+        quote = random.choice(self.quotes)
+        self.current_quote_text.set(quote["text"])
+        self.current_quote_author.set(f"— {quote['author']}")
+        self.current_quote_theme.set(f"Тема: {quote['theme']}")
+
+        # Добавляем в историю с временной меткой
+        history_entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "text": quote["text"],
+            "author": quote["author"],
+            "theme": quote["theme"]
         }
-        self.records.append(record)
-        self.reset_filter()
-        messagebox.showinfo("Успех", "Запись добавлена")
-        
-        # Очистка полей
-        self.temp_entry.delete(0, tk.END)
-        self.desc_entry.delete(0, tk.END)
-        self.rain_var.set("Нет")
+        self.history.append(history_entry)
+        self.save_history()
+        self.refresh_history_display()
 
-    def update_treeview(self, records_list):
-        for row in self.tree.get_children():
-            self.tree.delete(row)
-        for r in records_list:
-            self.tree.insert("", tk.END, values=(r["date"], r["temperature"], r["description"], r["rain"]))
+    def add_quote(self):
+        """Добавляет новую цитату с проверкой на пустые строки"""
+        text = self.new_text.get("1.0", tk.END).strip()
+        author = self.new_author.get().strip()
+        theme = self.new_theme.get().strip()
 
-    def apply_filter(self):
-        filter_date = self.filter_date.get().strip()
-        temp_from = self.filter_temp_from.get().strip()
-        temp_to = self.filter_temp_to.get().strip()
-
-        filtered = self.records[:]
-        if filter_date:
-            filtered = [r for r in filtered if r["date"] == filter_date]
-        if temp_from:
-            try:
-                t_min = float(temp_from)
-                filtered = [r for r in filtered if r["temperature"] >= t_min]
-            except ValueError:
-                messagebox.showerror("Ошибка", "Некорректное значение 'температура от'")
-                return
-        if temp_to:
-            try:
-                t_max = float(temp_to)
-                filtered = [r for r in filtered if r["temperature"] <= t_max]
-            except ValueError:
-                messagebox.showerror("Ошибка", "Некорректное значение 'температура до'")
-                return
-        self.update_treeview(filtered)
-
-    def reset_filter(self):
-        self.filter_date.delete(0, tk.END)
-        self.filter_temp_from.delete(0, tk.END)
-        self.filter_temp_to.delete(0, tk.END)
-        self.update_treeview(self.records)
-
-    def save_to_file(self):
-        try:
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.records, f, ensure_ascii=False, indent=4)
-            messagebox.showinfo("Успех", f"Сохранено в {DATA_FILE}")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
-
-    def load_from_file(self):
-        if not os.path.exists(DATA_FILE):
-            self.records = []
-            self.update_treeview([])
+        if not text or not author or not theme:
+            messagebox.showerror("Ошибка", "Все поля (текст, автор, тема) обязательны для заполнения!")
             return
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                self.records = json.load(f)
-            self.reset_filter()
-            messagebox.showinfo("Успех", f"Загружено {len(self.records)} записей")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Ошибка загрузки: {e}")
-            self.records = []
 
-if name == "main":
+        new_quote = {"text": text, "author": author, "theme": theme}
+        self.quotes.append(new_quote)
+        self.save_quotes()
+        self.update_author_filter()
+        self.update_theme_filter()
+
+        # Очистка полей
+        self.new_text.delete("1.0", tk.END)
+        self.new_author.delete(0, tk.END)
+        self.new_theme.delete(0, tk.END)
+
+        messagebox.showinfo("Успех", "Цитата добавлена!")
+
+    def update_author_filter(self):
+        """Обновляет список авторов в фильтре"""
+        authors = sorted(set(q["author"] for q in self.quotes))
+        self.author_filter_combo["values"] = ["(Все)"] + authors
+        if not self.filter_author_var.get():
+            self.filter_author_var.set("(Все)")
+
+    def update_theme_filter(self):
+        """Обновляет список тем в фильтре"""
+        themes = sorted(set(q["theme"] for q in self.quotes))
+        self.theme_filter_combo["values"] = ["(Все)"] + themes
+        if not self.filter_theme_var.get():
+            self.filter_theme_var.set("(Все)")
+
+    def reset_filters(self):
+        """Сбрасывает фильтры"""
+        self.filter_author_var.set("(Все)")
+        self.filter_theme_var.set("(Все)")
+        self.refresh_history_display()
+
+    def refresh_history_display(self):
+        """Обновляет отображение истории с учётом фильтров"""
+        self.history_listbox.delete(0, tk.END)
+
+        filtered = self.history
+        author_filter = self.filter_author_var.get()
+        theme_filter = self.filter_theme_var.get()
+
+        if author_filter != "(Все)":
+            filtered = [h for h in filtered if h["author"] == author_filter]
+        if theme_filter != "(Все)":
+            filtered = [h for h in filtered if h["theme"] == theme_filter]
+
+        for entry in filtered:
+            display = f"[{entry['timestamp']}] {entry['author']}: {entry['text'][:70]}... (Тема: {entry['theme']})"
+            self.history_listbox.insert(tk.END, display)
+
+    def clear_history(self):
+        """Очищает историю"""
+        self.history = []
+        self.save_history()
+        self.refresh_history_display()
+        messagebox.showinfo("История", "История очищена")
+
+    def export_history(self):
+        """Экспорт истории в файл"""
+        if not self.history:
+            messagebox.showwarning("Нет истории", "Нечего экспортировать")
+            return
+        filename = f"quote_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(self.history, f, ensure_ascii=False, indent=4)
+        messagebox.showinfo("Экспорт", f"История сохранена в {filename}")
+
+if __name__ == "__main__":
     root = tk.Tk()
-    app = WeatherDiary(root)
+    app = QuoteGenerator(root)
     root.mainloop()
