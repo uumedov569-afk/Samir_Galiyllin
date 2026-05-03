@@ -1,0 +1,16 @@
+# Исключаем файл данных, чтобы не засорять репозиторий личными записями
+weather_data.json
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
