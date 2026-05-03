@@ -1,16 +1,88 @@
-# Исключаем файл данных, чтобы не засорять репозиторий личными записями
-weather_data.json
-
-# Системные файлы
-.DS_Store
-Thumbs.db
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
 venv/
+env/
 ENV/
+env.bak/
+venv.bak/
+.venv/
+venv*/
+*venv*
+
+# IDE и редакторы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.directory
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Файлы проекта (данные пользователя)
+quotes.json
+history.json
+
+# Логи и базы данных
+*.log
+*.sql
+*.sqlite
+*.db
+
+# Файлы отчётов
+*.pdf
+*.docx
+*.txt
+!.gitkeep
+!README.md
+
+# Утилиты
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+*.tar.gz
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Файлы окружения
+.env
+.env.local
+.env.*.local
+
+# Файлы с персональными данными
+*.pem
+*.key
+*.crt
+
+# Временные файлы
+temp/
+tmp/
+*.tmp
+*.bak
+*.backup
+*.cache
+
+# OS
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Backup файлы генератора
+*_backup.json
+*.backup.json
